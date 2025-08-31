@@ -10,13 +10,18 @@ import { OAuth2Client } from 'google-auth-library';
 
 // --- JWT Generation ---
 const generateToken = (id: string) => {
-  return jwt.sign({ id }, process.env.JWT_SECRET!, {
+  if (!process.env.JWT_SECRET) {
+    throw new Error('JWT_SECRET is not defined in environment variables');
+  }
+  return jwt.sign({ id }, process.env.JWT_SECRET, {
     expiresIn: '30d',
   });
 };
 
 // --- 1. Signup with Email and Password ---
 export const signup = async (req: Request, res: Response) => {
+  console.log('Signup request received:', { body: { ...req.body, password: '[REDACTED]' } });
+  
   const schema = Joi.object({
     name: Joi.string().required(),
     dateOfBirth: Joi.date().iso().required(),
@@ -27,23 +32,29 @@ export const signup = async (req: Request, res: Response) => {
   const { error, value } = schema.validate(req.body);
 
   if (error) {
-  // Safely access the message and provide a fallback if it doesn't exist
-  const errorMessage = error.details?.[0]?.message ?? "Invalid input provided.";
-  return res.status(400).json({ message: errorMessage });
-}
+    const errorMessage = error.details?.[0]?.message ?? "Invalid input provided.";
+    console.log('Validation error:', errorMessage);
+    return res.status(400).json({ message: errorMessage });
+  }
 
   try {
-    const { name, dateOfBirth, email, password } = value; // 'value' is now correctly in scope
+    const { name, dateOfBirth, email, password } = value;
 
+    console.log('Looking for existing user with email:', email);
     let user = await User.findOne({ email });
+    
     if (user && user.isVerified) {
+      console.log('User already exists and is verified');
       return res.status(409).json({ message: 'User with this email already exists.' });
     }
 
     const otp = crypto.randomInt(100000, 999999).toString();
     const otpExpires = new Date(Date.now() + 10 * 60 * 1000);
+    
+    console.log('Generated OTP:', otp);
 
     if (user) {
+      console.log('Updating existing unverified user');
       user.name = name;
       user.dateOfBirth = dateOfBirth;
       user.password = password;
@@ -51,20 +62,30 @@ export const signup = async (req: Request, res: Response) => {
       user.otpExpires = otpExpires;
       await user.save();
     } else {
+      console.log('Creating new user');
       user = new User({ name, dateOfBirth, email, password, otp, otpExpires });
       await user.save();
     }
 
+    console.log('User saved successfully, sending OTP email...');
     await sendOtpEmail(email, otp);
+    console.log('OTP email sent successfully');
+    
     res.status(201).json({ message: 'OTP sent to your email. Please verify.' });
 
   } catch (err: any) {
-    res.status(500).json({ message: 'Server error during signup.', error: err.message });
+    console.error('Signup error:', err);
+    res.status(500).json({ 
+      message: 'Server error during signup.', 
+      error: process.env.NODE_ENV === 'development' ? err.message : 'Internal server error'
+    });
   }
 };
 
 // --- 2. Verify OTP ---
 export const verifyOtp = async (req: Request, res: Response) => {
+  console.log('Verify OTP request received:', req.body);
+  
   const schema = Joi.object({
     email: Joi.string().email().required(),
     otp: Joi.string().length(6).required(),
@@ -73,22 +94,25 @@ export const verifyOtp = async (req: Request, res: Response) => {
   const { error, value } = schema.validate(req.body);
 
   if (error) {
-  // Safely access the message and provide a fallback if it doesn't exist
-  const errorMessage = error.details?.[0]?.message ?? "Invalid input provided.";
-  return res.status(400).json({ message: errorMessage });
-}
+    const errorMessage = error.details?.[0]?.message ?? "Invalid input provided.";
+    console.log('Validation error:', errorMessage);
+    return res.status(400).json({ message: errorMessage });
+  }
 
   try {
-    const { email, otp } = value; // 'value' is now correctly in scope
+    const { email, otp } = value;
     const user = await User.findOne({ email });
 
     if (!user) {
+      console.log('User not found for email:', email);
       return res.status(404).json({ message: 'User not found.' });
     }
     if (!user.otp || user.otp !== otp) {
+      console.log('Invalid OTP. Expected:', user.otp, 'Received:', otp);
       return res.status(400).json({ message: 'Invalid OTP.' });
     }
     if (user.otpExpires! < new Date()) {
+      console.log('OTP expired. Expires at:', user.otpExpires, 'Current time:', new Date());
       return res.status(400).json({ message: 'OTP has expired.' });
     }
 
@@ -98,6 +122,8 @@ export const verifyOtp = async (req: Request, res: Response) => {
     await user.save();
 
     const token = generateToken((user._id as any).toString());
+    console.log('OTP verified successfully for user:', email);
+    
     res.status(200).json({
       message: 'Account verified successfully!',
       token,
@@ -105,7 +131,11 @@ export const verifyOtp = async (req: Request, res: Response) => {
     });
 
   } catch (err: any) {
-    res.status(500).json({ message: 'Server error during OTP verification.', error: err.message });
+    console.error('Verify OTP error:', err);
+    res.status(500).json({ 
+      message: 'Server error during OTP verification.', 
+      error: process.env.NODE_ENV === 'development' ? err.message : 'Internal server error'
+    });
   }
 };
 
@@ -119,10 +149,9 @@ export const login = async (req: Request, res: Response) => {
     const { error, value } = schema.validate(req.body);
 
     if (error) {
-  // Safely access the message and provide a fallback if it doesn't exist
-  const errorMessage = error.details?.[0]?.message ?? "Invalid input provided.";
-  return res.status(400).json({ message: errorMessage });
-}
+        const errorMessage = error.details?.[0]?.message ?? "Invalid input provided.";
+        return res.status(400).json({ message: errorMessage });
+    }
 
     try {
         const { email, password } = value;
@@ -145,7 +174,11 @@ export const login = async (req: Request, res: Response) => {
         });
 
     } catch (err: any) {
-        res.status(500).json({ message: 'Server error during login.', error: err.message });
+        console.error('Login error:', err);
+        res.status(500).json({ 
+          message: 'Server error during login.', 
+          error: process.env.NODE_ENV === 'development' ? err.message : 'Internal server error'
+        });
     }
 };
 
@@ -155,7 +188,6 @@ const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 export const googleLogin = async (req: Request, res: Response) => {
     const { token } = req.body;
     try {
-        // ✅ ADD THIS CHECK
         if (!process.env.GOOGLE_CLIENT_ID) {
             console.error("Google Client ID not configured in .env file");
             return res.status(500).json({ message: "Server configuration error." });
@@ -163,7 +195,7 @@ export const googleLogin = async (req: Request, res: Response) => {
 
         const ticket = await client.verifyIdToken({
             idToken: token,
-            audience: process.env.GOOGLE_CLIENT_ID, // Now TypeScript knows this is a string
+            audience: process.env.GOOGLE_CLIENT_ID,
         });
         
         const payload = ticket.getPayload();
@@ -172,7 +204,6 @@ export const googleLogin = async (req: Request, res: Response) => {
             return res.status(400).json({ message: "Invalid Google token." });
         }
         
-        // ... rest of the function remains the same
         const { sub: googleId, email, name } = payload;
         
         let user = await User.findOne({ googleId });
@@ -201,7 +232,11 @@ export const googleLogin = async (req: Request, res: Response) => {
         });
 
     } catch (err: any) {
-        res.status(500).json({ message: 'Google authentication failed.', error: err.message });
+        console.error('Google login error:', err);
+        res.status(500).json({ 
+          message: 'Google authentication failed.', 
+          error: process.env.NODE_ENV === 'development' ? err.message : 'Internal server error'
+        });
     }
 };
 
@@ -213,11 +248,10 @@ export const generateLoginOtp = async (req: Request, res: Response) => {
 
   const { error, value } = schema.validate(req.body);
   
- if (error) {
-  // Safely access the message and provide a fallback if it doesn't exist
-  const errorMessage = error.details?.[0]?.message ?? "Invalid input provided.";
-  return res.status(400).json({ message: errorMessage });
-}
+  if (error) {
+    const errorMessage = error.details?.[0]?.message ?? "Invalid input provided.";
+    return res.status(400).json({ message: errorMessage });
+  }
 
   try {
     const { email } = value;
@@ -236,7 +270,11 @@ export const generateLoginOtp = async (req: Request, res: Response) => {
     res.status(200).json({ message: 'OTP has been sent to your email.' });
 
   } catch (err: any) {
-    res.status(500).json({ message: 'Server error.', error: err.message });
+    console.error('Generate login OTP error:', err);
+    res.status(500).json({ 
+      message: 'Server error.', 
+      error: process.env.NODE_ENV === 'development' ? err.message : 'Internal server error'
+    });
   }
 };
 
@@ -250,10 +288,9 @@ export const loginWithOtp = async (req: Request, res: Response) => {
   const { error, value } = schema.validate(req.body);
 
   if (error) {
-  // Safely access the message and provide a fallback if it doesn't exist
-  const errorMessage = error.details?.[0]?.message ?? "Invalid input provided.";
-  return res.status(400).json({ message: errorMessage });
-}
+    const errorMessage = error.details?.[0]?.message ?? "Invalid input provided.";
+    return res.status(400).json({ message: errorMessage });
+  }
 
   try {
     const { email, otp } = value;
@@ -281,6 +318,10 @@ export const loginWithOtp = async (req: Request, res: Response) => {
     });
 
   } catch (err: any) {
-      res.status(500).json({ message: 'Server error.', error: err.message });
+      console.error('Login with OTP error:', err);
+      res.status(500).json({ 
+        message: 'Server error.', 
+        error: process.env.NODE_ENV === 'development' ? err.message : 'Internal server error'
+      });
   }
 };

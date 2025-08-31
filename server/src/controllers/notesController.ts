@@ -2,19 +2,6 @@ import { Request, Response } from 'express';
 import Note from '../models/Note.js';
 import Joi from 'joi';
 
-// Extend Express Request type to include user with _id
-declare global {
-  namespace Express {
-    interface User {
-      _id: string;
-      // add other user properties if needed
-    }
-    interface Request {
-      user?: User;
-    }
-  }
-}
-
 // --- 1. Get All Notes for a User ---
 export const getNotes = async (req: Request, res: Response) => {
   try {
@@ -50,7 +37,7 @@ export const createNote = async (req: Request, res: Response) => {
     const note = new Note({
       title,
       content,
-      user: req.user._id, // Now TypeScript knows this is safe
+      user: req.user._id,
     });
     const createdNote = await note.save();
     res.status(201).json(createdNote);
@@ -73,7 +60,6 @@ export const deleteNote = async (req: Request, res: Response) => {
     }
 
     // Ensure the note belongs to the logged-in user
-    // We can now safely access req.user._id
     if (note.user.toString() !== req.user._id.toString()) {
       return res.status(401).json({ message: 'User not authorized to delete this note.' });
     }
