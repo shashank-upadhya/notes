@@ -62,7 +62,7 @@ export const noteSlice = createSlice({
   name: 'notes',
   initialState,
   reducers: {
-    reset: (state) => initialState,
+    reset: (_state) => initialState,
   },
   extraReducers: (builder) => {
     builder
