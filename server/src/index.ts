@@ -11,12 +11,16 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 // Middleware
-app.use(cors()); // Enable Cross-Origin Resource Sharing
+// app.use(cors()); // Enable Cross-Origin Resource Sharing
 app.use(express.json()); // To parse JSON request bodies
 
+// app.use(cors({
+//   origin: 'http://localhost:5173', // My Vite dev server port
+//   credentials: true
+// }));
+
 app.use(cors({
-  origin: 'http://localhost:5173', // My Vite dev server port
-  credentials: true
+  origin: process.env.CLIENT_URL,
 }));
 
 // --- Database Connection ---
