@@ -11,21 +11,17 @@ const VerifyOtpPage = () => {
   const location = useLocation();
   const email = location.state?.email;
 
-  const { user, isLoading, isError, isSuccess, message } = useSelector(
+  const { user, loadingAction, isError, isSuccess, message } = useSelector(
     (state: RootState) => state.auth
   );
 
   useEffect(() => {
-    // If there's no email, the user shouldn't be here. Redirect to signup.
     if (!email) {
       navigate('/signup');
     }
-
-    // If OTP verification is successful and we have a user object
     if (isSuccess && user) {
-      navigate('/notes'); // Navigate to the main notes page
+      navigate('/notes');
     }
-
     return () => {
       dispatch(reset());
     };
@@ -38,7 +34,7 @@ const VerifyOtpPage = () => {
   };
   
   return (
-    <div className="flex items-center justify-center min-h-screen bg-gray-100">
+    <div className="grid h-screen w-screen place-items-center bg-gray-100">
       <div className="w-full max-w-md p-8 space-y-6 bg-white rounded-lg shadow-md">
         <div className="text-center">
           <h1 className="text-3xl font-bold text-gray-900">Verify Your Account</h1>
@@ -62,10 +58,10 @@ const VerifyOtpPage = () => {
           />
           <button
             type="submit"
-            disabled={isLoading}
+            disabled={loadingAction === 'verify'}
             className="w-full px-4 py-2 font-bold text-white bg-blue-500 rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-blue-300"
           >
-            {isLoading ? 'Verifying...' : 'Verify Account'}
+            {loadingAction === 'verify' ? 'Verifying...' : 'Verify Account'}
           </button>
         </form>
       </div>
