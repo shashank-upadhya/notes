@@ -3,7 +3,9 @@ import { useSelector, useDispatch } from 'react-redux';
 import { useNavigate, Link } from 'react-router-dom';
 import { FiEye, FiEyeOff } from 'react-icons/fi';
 import type { AppDispatch, RootState } from '../app/store';
-import { generateLoginOtp, loginWithOtp, reset } from '../features/auth/authSlice';
+import { generateLoginOtp, googleLogin , loginWithOtp, reset } from '../features/auth/authSlice';
+import { GoogleLogin } from '@react-oauth/google';
+
 
 // Asset Imports
 import logo from '../assets/logo.png';
@@ -65,6 +67,30 @@ const LoginPage = () => {
           {/* Error/Success Message Display */}
           {isError && <p className="mt-4 text-sm text-center text-red-500">{message}</p>}
           {isSuccess && message && <p className="mt-4 text-sm text-center text-green-500">{message}</p>}
+
+          <div className="my-4 flex flex-col items-center">
+            <GoogleLogin
+              onSuccess={(credentialResponse) => {
+                if (credentialResponse.credential) {
+                  // Send the token to your Redux thunk
+                  dispatch(googleLogin(credentialResponse.credential));
+                }
+              }}
+              onError={() => {
+                console.log('Login Failed');
+              }}
+              useOneTap
+            />
+          </div>
+
+          <div className="relative my-4">
+            <div className="absolute inset-0 flex items-center">
+              <span className="w-full border-t" />
+            </div>
+            <div className="relative flex justify-center text-xs uppercase">
+              <span className="bg-white px-2 text-gray-500">Or continue with</span>
+            </div>
+          </div>
 
           <form className="mt-4 space-y-3" onSubmit={handleLogin}>
             <div>

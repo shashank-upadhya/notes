@@ -33,6 +33,14 @@ const loginWithOtp = async (loginData: any) => {
   return response.data;
 }
 
+const googleLogin = async (token: string) => {
+  const response = await api.post('/auth/google', { token });
+  if (response.data) {
+    localStorage.setItem('user', JSON.stringify(response.data));
+  }
+  return response.data;
+};
+
 // Logout user
 const logout = () => {
   localStorage.removeItem('user');
@@ -43,6 +51,7 @@ const authService = {
   verifyOtp,
   generateLoginOtp,
   loginWithOtp,
+  googleLogin,
   logout,
 };
 

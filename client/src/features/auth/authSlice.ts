@@ -1,6 +1,7 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import authService from '../../services/authService';
 
+
 // Get user from localStorage
 const user = JSON.parse(localStorage.getItem('user') || 'null');
 
@@ -18,6 +19,18 @@ interface UserData { name: string; dateOfBirth: string; email: string; password:
 interface VerifyOtpData { email: string; otp: string; }
 
 // --- Async Thunks ---
+export const googleLogin = createAsyncThunk(
+  'auth/googleLogin',
+  async (token: string, thunkAPI) => {
+    try {
+      return await authService.googleLogin(token);
+    } catch (error: any) {
+      const message = error.response?.data?.message || error.message;
+      return thunkAPI.rejectWithValue(message);
+    }
+  }
+);
+
 export const signup = createAsyncThunk<any, UserData>('auth/signup', async (userData, thunkAPI) => {
     try {
         return await authService.signup(userData);
@@ -122,6 +135,20 @@ export const authSlice = createSlice({
         state.user = action.payload;
       })
       .addCase(loginWithOtp.rejected, (state, action) => {
+        state.loadingAction = 'idle';
+        state.isError = true;
+        state.message = action.payload as string;
+      })
+      // Google Login
+      .addCase(googleLogin.pending, (state) => {
+        state.loadingAction = 'login';
+      })
+      .addCase(googleLogin.fulfilled, (state, action) => {
+        state.loadingAction = 'idle';
+        state.isSuccess = true;
+        state.user = action.payload;
+      })
+      .addCase(googleLogin.rejected, (state, action) => {
         state.loadingAction = 'idle';
         state.isError = true;
         state.message = action.payload as string;
